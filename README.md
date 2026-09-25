@@ -7,12 +7,16 @@ de tickets (`museolarco.org/tickets`), donde el proceso terminaba en un error
 Incluye el **entorno de prueba aislado** con el que se aisló la causa y los
 **archivos corregidos** listos para revisar/aplicar en el sitio.
 
+> 📄 **Diagnóstico completo, prueba por prueba:** ver **[`DIAGNOSTICO.md`](DIAGNOSTICO.md)**
+> (hipótesis evaluadas, cómo se comprobaron/descartaron, archivos revisados y hallazgos).
+
 ---
 
 ## Conclusión
 
 **La pasarela de Culqi funciona correctamente.** El fallo está en el **código del
-propio sitio** (WordPress, tema `mltheme`). Se identificaron **dos defectos**:
+propio sitio** (WordPress, tema `mltheme`). Se identificaron **tres defectos** (más
+un hallazgo de seguridad):
 
 ### 1) BLOQUEANTE — Frontend · `js/services/index.js`
 La clase `Service` envía el pago con **`$.ajax`** (jQuery), pero en la página
@@ -47,6 +51,25 @@ arreglando el frontend, **un cobro aprobado se mostraría como "CARGO FALLIDO"**
 **Corrección:** `charge.php` devuelve **201** al aprobar (200 si requiere 3DS,
 400 en error) y se blindan los datos de sesión.
 
+### 3) BLOQUEANTE — `SyntaxError` por variable fuera de alcance · `template-tickets.php` + `ticketp1.php`
+En la página de pago aparece `Uncaught SyntaxError: Unexpected token ')'`. Origen:
+`$CURRENT_DAY` / `$CURRENT_HOUR` se **definen solo en `ticketp1.php` (paso 1,
+líneas 22-23)**, pero se **usan en el script global de `template-tickets.php`
+(línea 664)** que corre en **todos los pasos**. En el **paso 3 (pago)**
+`ticketp1.php` no se carga → las variables quedan indefinidas → el HTML sale
+`if (jQuery('#day').val() == ) {` → JavaScript inválido.
+
+**Corrección:** no depender de una variable de paso 1; usar el valor directo:
+```php
+if (jQuery('#day').val() == <?php echo date("Ymd"); ?>) {
+  if ('<?php echo date("H").date("i"); ?>' > '<?php echo $_SESSION['START_TIME_FOR_DISCLAIMER'] ?? ''; ?>') {
+```
+
+### 🔴 Hallazgo de seguridad (aparte, urgente)
+`settings.php` tiene la **llave secreta de Culqi en texto plano** dentro del tema
+(más llaves RSA y una secreta antigua comentada). **Rotar la `sk_live`** en el
+panel de Culqi y moverla a una variable de entorno fuera del `webroot`.
+
 > El servidor **no se cae**: el `error_log` solo tenía *warnings* inofensivos por
 > `$_SESSION['tickets']` vacío (desde 2024); cero errores fatales y cero errores
 > de Culqi.
@@ -74,7 +97,8 @@ se completa y se muestra correctamente como exitoso.
 3. **Network en la web** al pagar → **0 peticiones** a `charge.php`/`order.php`:
    el navegador ni llama al servidor.
 4. **Lectura del código del tema** (`main.js`, `services/index.js`,
-   `ajax/*.php`) y del **`error_log`** → se ubicaron los dos defectos de arriba.
+   `ajax/*.php`, `template-tickets.php`, `ticketp1.php`) y del **`error_log`** →
+   se ubicaron los defectos de arriba. **Detalle completo en [`DIAGNOSTICO.md`](DIAGNOSTICO.md).**
 
 ---
 
@@ -96,16 +120,21 @@ Ver `correccion-produccion/README.md` (qué cambió y cómo desplegar) y
 
 ## Recomendaciones
 
-1. Aplicar los 3 archivos corregidos (previo respaldo).
-2. **Cache-busting del JS**: no basta con subir el archivo (los navegadores y un
+1. Aplicar los **archivos corregidos** (previo respaldo): `js/services/index.js`,
+   `ajax/charge.php`, `ajax/order.php`.
+2. **Corregir el `SyntaxError`** (Defecto 3) en `template-tickets.php` línea 664
+   (usar `date("Ymd")` en vez de `$CURRENT_DAY`; ver `correccion-produccion/README.md`).
+3. **Cache-busting del JS**: no basta con subir el archivo (los navegadores y un
    posible CDN sirven la versión cacheada, y `services/index.js` se carga como
    módulo, que no se versiona con `?v=`). Solución resuelta en
    `correccion-produccion/cache-busting/` (un `.htaccess` que fuerza revalidación).
-3. Para pagos con **tarjeta**, la **orden no es necesaria** (las Órdenes son para
+4. **Rotar la llave secreta de Culqi** (está en texto plano en `settings.php`) y
+   moverla fuera del código.
+5. Para pagos con **tarjeta**, la **orden no es necesaria** (las Órdenes son para
    Yape/PagoEfectivo/transferencia y exigen mínimo S/ 6 + `client_details`
    válidos); se puede simplificar el flujo omitiéndola.
-4. **Revisar en el panel de Culqi** si hay cargos aprobados que la web reportó
-   como fallidos (por el defecto #2), para descartar cobros no reflejados.
+6. **Revisar en el panel de Culqi** si hay cargos aprobados que la web reportó
+   como fallidos (por el Defecto 4), para descartar cobros no reflejados.
 
 > Ningún archivo de este repo contiene llaves secretas. Las llaves van en un
 > `.env` local (ignorado por git).

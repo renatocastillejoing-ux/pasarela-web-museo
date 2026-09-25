@@ -9,6 +9,9 @@ Archivos **corregidos** para reemplazar en el sitio. Rutas en producción
 | `ajax/charge.php` | `wp-content/themes/mltheme/ajax/charge.php` |
 | `ajax/order.php` | `wp-content/themes/mltheme/ajax/order.php` |
 
+Además hay **un cambio de una línea** en `template-tickets.php` (ver más abajo,
+“Defecto del `SyntaxError`”) y un **hallazgo de seguridad** que atender.
+
 ## Qué se corrigió y por qué
 
 **1. `js/services/index.js` — BUG BLOQUEANTE (frontend).**
@@ -34,10 +37,33 @@ sesión. Nota: para pagos con **tarjeta la orden no es necesaria** (las Órdenes
 son para Yape/PagoEfectivo/transferencia y exigen mínimo S/ 6 + client_details
 válidos). Si solo cobran con tarjeta, se puede omitir esa llamada.
 
+**4. `template-tickets.php` — Defecto del `SyntaxError` (cambio de 1 línea).**
+Las variables `$CURRENT_DAY`/`$CURRENT_HOUR` se definen **solo** en `ticketp1.php`
+(paso 1), pero el script del pie (línea 664) las usa en **todos** los pasos. En el
+paso de pago quedan indefinidas → `if (... == ) {` → JavaScript inválido. Cambiar
+esa línea para no depender de una variable de paso 1:
+
+```php
+// ANTES (línea 664):
+if (jQuery('#day').val() == <?php echo $CURRENT_DAY; ?>) {
+  if ('<?php echo $CURRENT_HOUR; ?>' > '<?php echo $_SESSION['START_TIME_FOR_DISCLAIMER']; ?>') {
+
+// DESPUÉS:
+if (jQuery('#day').val() == <?php echo date("Ymd"); ?>) {
+  if ('<?php echo date("H").date("i"); ?>' > '<?php echo $_SESSION['START_TIME_FOR_DISCLAIMER'] ?? ''; ?>') {
+```
+
+**5. Seguridad — `settings.php` (atender, no es opcional).**
+La llave secreta de Culqi está en **texto plano** en `settings.php`
+(`define('SECRET_KEY', "sk_live_…")`), junto con una secreta antigua comentada y
+llaves RSA. **Rotar la `sk_live`** en el panel de Culqi y moverla a una variable
+de entorno **fuera del `webroot`** (nunca dentro del tema).
+
 ## Cómo desplegar
 
-1. **Respaldar** los 3 archivos actuales (cPanel → seleccionar → Download).
-2. Reemplazar cada archivo por su versión corregida (Edit → pegar → Save, o subir).
+1. **Respaldar** los archivos actuales (cPanel → seleccionar → Download).
+2. Reemplazar cada archivo por su versión corregida (Edit → pegar → Save, o subir),
+   y aplicar el cambio de 1 línea en `template-tickets.php` (Defecto del `SyntaxError`).
 3. **Cache-busting del JS** (importante): el navegador cachea `services/index.js`
    y, al ser un módulo, no se versiona con `?v=`. Copiar el `.htaccess` de
    `cache-busting/` a `wp-content/themes/mltheme/js/.htaccess` para forzar
