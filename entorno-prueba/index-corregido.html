@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Réplica corregida · Culqi</title>
+<style>
+  :root{--teal:#508C9B;--teal-dark:#3A6B78;--navy:#201E43;--canvas:#CBDDE1;--surface:#fff;
+    --ice:#EBF3F5;--steel:#D8DCE4;--success:#2E9E8A;--success-soft:#D4F5EF;--success-dark:#1A6B5C;
+    --warning:#D4855A;--warning-soft:#FAE8DC;--warning-dark:#8A4520;
+    --font:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--canvas);color:var(--navy);font-family:var(--font);min-height:100vh;
+    display:flex;align-items:flex-start;justify-content:center;padding:32px 16px}
+  .card{background:var(--surface);border:1px solid rgba(216,220,228,.5);border-radius:16px;
+    box-shadow:0 1px 3px rgba(37,36,35,.06),0 4px 14px rgba(37,36,35,.05);width:100%;max-width:580px;padding:28px}
+  .brand{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+  .logo{width:40px;height:40px;border-radius:12px;background:var(--teal);color:#fff;display:flex;
+    align-items:center;justify-content:center;font-weight:800;font-size:14px}
+  h1{font-size:19px;font-weight:800;letter-spacing:-.02em}
+  .sub{font-size:12.5px;color:rgba(32,30,67,.55)}
+  .aviso{background:var(--ice);border-radius:12px;padding:12px 14px;font-size:12.5px;margin:14px 0;line-height:1.5}
+  .aviso b{color:var(--navy)}
+  .rows{border:1px solid var(--steel);border-radius:12px;overflow:hidden;margin:14px 0}
+  .row{display:flex;justify-content:space-between;padding:11px 15px;font-size:14px;border-bottom:1px solid var(--ice)}
+  .row:last-child{border-bottom:none}.row span{color:rgba(32,30,67,.6)}
+  button{width:100%;height:50px;border:none;border-radius:12px;background:var(--teal);color:#fff;
+    font-family:inherit;font-size:15px;font-weight:700;cursor:pointer}
+  button:hover:not(:disabled){background:var(--teal-dark)}button:disabled{opacity:.5;cursor:not-allowed}
+  .log{margin-top:18px;display:flex;flex-direction:column;gap:10px}
+  .entry{border-radius:12px;padding:12px 14px;font-size:13px;border-left:4px solid var(--steel);background:var(--ice)}
+  .entry.ok{background:var(--success-soft);border-left-color:var(--success);color:var(--success-dark)}
+  .entry.err{background:var(--warning-soft);border-left-color:var(--warning);color:var(--warning-dark)}
+  .entry b{display:block;margin-bottom:4px}.entry pre{white-space:pre-wrap;word-break:break-word;
+    font-size:12px;font-family:ui-monospace,Menlo,monospace;margin-top:4px}
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand">
+      <span class="logo">ML</span>
+      <div><h1>Réplica con código CORREGIDO</h1>
+        <p class="sub">Misma clase <code>Service</code> de la web, pero con <b>fetch</b> en vez de <b>$.ajax</b></p></div>
+    </div>
+    <div class="aviso">Réplica aislada del flujo real de la web con la corrección aplicada.
+      El original usaba <b>$.ajax</b> (que fallaba porque <b>$</b> no existe → 502 inventado, sin enviar nada).
+      Aquí, con <b>fetch</b>, la petición <b>sí se envía</b> a <code>ajax/charge.php</code> y se evalúa el éxito con
+      <code>statusCode === 201</code>, igual que <code>main.js</code>.</div>
+    <div class="rows">
+      <div class="row"><span>Monto</span><strong id="monto">—</strong></div>
+      <div class="row"><span>Modo</span><strong id="modo">—</strong></div>
+    </div>
+    <button id="btn" disabled>Cargando…</button>
+    <section id="log" class="log" hidden></section>
+  </main>
+
+<script src="https://3ds.culqi.com" defer></script>
+<script src="https://checkout.culqi.com/js/v4"></script>
+
+<!-- Clase Service CORREGIDA (idéntica a la de producción), con fetch -->
+<script type="module">
+  const URL_BASE = window.location.origin;   // en la web real es la ruta del theme
+
+  class Service {
+    #BASE_URL = URL_BASE;
+    #post = async (endPoint, params) => {
+      const data = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "") data.append(k, v);
+      });
+      try {
+        const response = await fetch(`${this.#BASE_URL}/${endPoint}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: data,
+        });
+        const texto = await response.text();
+        let cuerpo; try { cuerpo = JSON.parse(texto); } catch (_e) { cuerpo = texto; }
+        return { statusCode: response.status, data: cuerpo };
+      } catch (err) {
+        console.error("Error de red:", err);
+        return { statusCode: 0, data: null };
+      }
+    };
+    createCharge = async (body) => this.#post("ajax/charge.php", {
+      amount: body.amount, currency_code: body.currency_code, email: body.email,
+      token: body.source_id, description: body.description,
+      deviceId: body.antifraud_details?.device_finger_print_id,
+    });
+  }
+
+  const service = new Service();
+  const logEl = document.getElementById("log");
+  const btn = document.getElementById("btn");
+  let cfg = null;
+
+  function log(title, obj, kind) {
+    logEl.hidden = false;
+    const e = document.createElement("div");
+    e.className = "entry " + (kind || "");
+    const body = obj == null ? "" : (typeof obj === "string" ? obj : JSON.stringify(obj, null, 2));
+    e.innerHTML = "<b></b>" + (body ? "<pre></pre>" : "");
+    e.querySelector("b").textContent = title;
+    if (body) e.querySelector("pre").textContent = body;
+    logEl.appendChild(e);
+  }
+
+  const res = await fetch("/api/config").then(r => r.json());
+  cfg = res;
+  document.getElementById("monto").textContent = "S/ " + (res.amount / 100).toFixed(2);
+  document.getElementById("modo").textContent = res.modo;
+  Culqi.publicKey = res.public_key;
+  Culqi.settings({ currency: res.currency, amount: res.amount, title: "MUSEO LARCO - Réplica" });
+  Culqi.options({ lang: "auto", installments: false, modal: true,
+    paymentMethods: { tarjeta: true, yape: false, billetera: false, bancaMovil: false, agente: false, cuotealo: false } });
+  btn.disabled = false;
+  btn.textContent = "Pagar S/ " + (res.amount / 100).toFixed(2);
+  btn.addEventListener("click", () => Culqi.open());
+
+  // Callback global de Culqi v4
+  window.culqi = async function () {
+    if (Culqi.token) {
+      const token = Culqi.token.id;
+      const email = Culqi.token.email;
+      log("✔ Token generado", { token, email }, "ok");
+
+      // MISMO flujo que main.js: arma el body y llama a service.createCharge
+      const body = {
+        amount: cfg.amount, currency_code: cfg.currency, email,
+        source_id: token, description: "Réplica corregida",
+        antifraud_details: { device_finger_print_id: "replica-test" },
+      };
+      const { statusCode, data } = await service.createCharge(body);
+      log("Respuesta de ajax/charge.php · statusCode " + statusCode, data, statusCode === 201 ? "ok" : "err");
+
+      // MISMA verificación que main.js
+      if (statusCode === 201) {
+        log("✅ CARGO EXITOSO — el flujo corregido funciona de punta a punta", null, "ok");
+      } else {
+        log("CARGO FALLIDO — pero la petición SÍ se envió y trajo respuesta real (ya no es un 502 inventado)", null, "err");
+      }
+    } else if (Culqi.error) {
+      log("Error de Culqi (tokenización)", Culqi.error, "err");
+    }
+  };
+</script>
+</body>
+</html>

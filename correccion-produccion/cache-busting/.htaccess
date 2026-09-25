@@ -1,0 +1,26 @@
+# ============================================================
+# Cache-busting para los JS del tema (Museo Larco).
+# Colocar este archivo en:  wp-content/themes/mltheme/js/.htaccess
+#
+# Fuerza que el navegador REVALIDE los .js con el servidor en cada carga. Así, al
+# subir la versión corregida (p. ej. services/index.js), los usuarios reciben el
+# archivo nuevo de inmediato — incluidos los que se cargan como MÓDULO
+# (import ... from "./services/index.js"), que NO se pueden versionar con un
+# simple ?v= en la etiqueta <script>.
+#
+# Nota: "no-cache" NO significa "no cachear"; significa "revalidar antes de usar".
+# El servidor responde 304 si el archivo no cambió (rápido) o 200 con el archivo
+# nuevo si cambió. El costo es mínimo y garantiza que siempre se sirva la última
+# versión.
+# ============================================================
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js|mjs)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+    Header unset Expires
+    Header unset Pragma
+  </FilesMatch>
+</IfModule>
+
+# Garantiza validadores (ETag / Last-Modified) para que la revalidación funcione.
+FileETag MTime Size

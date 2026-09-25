@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prueba de compra · Culqi</title>
+<style>
+  :root{
+    --teal:#508C9B; --teal-dark:#3A6B78; --navy:#201E43; --canvas:#CBDDE1;
+    --surface:#fff; --ice:#EBF3F5; --steel:#D8DCE4; --success:#2E9E8A;
+    --success-soft:#D4F5EF; --success-dark:#1A6B5C; --warning:#D4855A;
+    --warning-soft:#FAE8DC; --warning-dark:#8A4520;
+    --font:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--canvas);color:var(--navy);font-family:var(--font);
+    min-height:100vh;display:flex;align-items:flex-start;justify-content:center;
+    padding:32px 16px;-webkit-font-smoothing:antialiased}
+  .card{background:var(--surface);border:1px solid rgba(216,220,228,.5);
+    border-radius:16px;box-shadow:0 1px 3px rgba(37,36,35,.06),0 4px 14px rgba(37,36,35,.05);
+    width:100%;max-width:560px;padding:28px}
+  .brand{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+  .logo{width:40px;height:40px;border-radius:12px;background:var(--teal);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+  h1{font-size:20px;font-weight:800;letter-spacing:-.02em}
+  .sub{font-size:13px;color:rgba(32,30,67,.55);margin-top:1px}
+  .rows{border:1px solid var(--steel);border-radius:12px;overflow:hidden;margin:18px 0}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;
+    font-size:14px;border-bottom:1px solid var(--ice)}
+  .row:last-child{border-bottom:none}
+  .row span{color:rgba(32,30,67,.6)}
+  .row strong{font-variant-numeric:tabular-nums}
+  .pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px}
+  .pill.live{background:var(--warning-soft);color:var(--warning-dark)}
+  .pill.test{background:var(--success-soft);color:var(--success-dark)}
+  button{width:100%;height:50px;border:none;border-radius:12px;background:var(--teal);
+    color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;
+    transition:background .15s}
+  button:hover:not(:disabled){background:var(--teal-dark)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .note{font-size:12px;color:rgba(32,30,67,.5);margin-top:14px;line-height:1.5}
+  .log{margin-top:20px;display:flex;flex-direction:column;gap:10px}
+  .entry{border-radius:12px;padding:12px 14px;font-size:13px;
+    border-left:4px solid var(--steel);background:var(--ice)}
+  .entry.ok{background:var(--success-soft);border-left-color:var(--success);color:var(--success-dark)}
+  .entry.err{background:var(--warning-soft);border-left-color:var(--warning);color:var(--warning-dark)}
+  .entry b{display:block;margin-bottom:4px;font-weight:700}
+  .entry pre{white-space:pre-wrap;word-break:break-word;font-size:12px;
+    font-family:ui-monospace,'SF Mono',Menlo,monospace;margin-top:4px}
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">ML</span>
+      <div>
+        <h1>Prueba de compra</h1>
+        <p class="sub">Cargo directo con Culqi · código nuevo y aislado</p>
+      </div>
+    </div>
+
+    <div class="rows">
+      <div class="row"><span>Monto</span><strong id="monto">—</strong></div>
+      <div class="row"><span>Descripción</span><strong>Prueba de compra 1 sol</strong></div>
+      <div class="row"><span>Modo</span><span id="modo" class="pill">—</span></div>
+    </div>
+
+    <button id="btn" disabled>Cargando…</button>
+
+    <p class="note">Al pulsar se abre el formulario de Culqi. Ingresa una tarjeta
+      real (en modo LIVE se cobra de verdad). El resultado exacto de Culqi aparece abajo.</p>
+
+    <section id="log" class="log" hidden></section>
+  </main>
+
+<script src="https://3ds.culqi.com" defer></script>
+<script src="https://checkout.culqi.com/js/v4"></script>
+<script>
+(function () {
+  "use strict";
+  var cfg = null;
+  var logEl = document.getElementById("log");
+  var btn = document.getElementById("btn");
+
+  function log(title, obj, kind) {
+    logEl.hidden = false;
+    var e = document.createElement("div");
+    e.className = "entry " + (kind || "");
+    var body = (obj == null) ? "" : (typeof obj === "string" ? obj : JSON.stringify(obj, null, 2));
+    e.innerHTML = "<b></b>" + (body ? "<pre></pre>" : "");
+    e.querySelector("b").textContent = title;
+    if (body) e.querySelector("pre").textContent = body;
+    logEl.appendChild(e);
+  }
+
+  // 1) Traer configuración del backend y preparar Culqi Checkout v4.
+  fetch("/api/config").then(function (r) { return r.json(); }).then(function (c) {
+    cfg = c;
+    document.getElementById("monto").textContent = "S/ " + (c.amount / 100).toFixed(2);
+    var modo = document.getElementById("modo");
+    modo.textContent = c.modo;
+    modo.className = "pill " + (c.modo === "LIVE" ? "live" : "test");
+
+    Culqi.publicKey = c.public_key;
+    Culqi.settings({
+      currency: c.currency,
+      amount: c.amount,
+      title: "MUSEO LARCO - Prueba"
+    });
+    Culqi.options({
+      lang: "auto",
+      installments: false,
+      modal: true,
+      paymentMethods: {
+        tarjeta: true, yape: false, billetera: false,
+        bancaMovil: false, agente: false, cuotealo: false
+      }
+    });
+
+    btn.disabled = false;
+    btn.textContent = "Pagar S/ " + (c.amount / 100).toFixed(2);
+  }).catch(function (e) {
+    log("No se pudo cargar la configuración del backend", String(e), "err");
+  });
+
+  btn.addEventListener("click", function () { if (cfg) Culqi.open(); });
+
+  // 2) Callback global obligatorio de Culqi v4.
+  window.culqi = function () {
+    if (Culqi.token) {
+      var token = Culqi.token.id;
+      var email = Culqi.token.email;
+      log("✔ Token generado — la tokenización de Culqi FUNCIONA", { token: token, email: email }, "ok");
+
+      fetch("/api/cargo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: token, email: email })
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        log("Respuesta de Culqi al cargo · status " + (res.culqi_status || "—"),
+            res.culqi_response || res, res.ok ? "ok" : "err");
+        if (res.ok) {
+          log("✅ CARGO EXITOSO — Culqi funciona de punta a punta", null, "ok");
+        } else {
+          log("⚠ Culqi respondió un ERROR (pero respondió: NO es un 502 del servidor). "
+              + "Revisa el detalle de arriba: si es un rechazo/validación, el servicio de Culqi está operativo.",
+              null, "err");
+        }
+      }).catch(function (e) {
+        log("No se pudo llamar al backend de la prueba", String(e), "err");
+      });
+
+    } else if (Culqi.error) {
+      log("Error de Culqi en la tokenización", Culqi.error, "err");
+    }
+  };
+})();
+</script>
+</body>
+</html>

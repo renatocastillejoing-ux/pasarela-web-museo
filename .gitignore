@@ -1,0 +1,10 @@
+# Credenciales — NUNCA subir
+.env
+*/.env
+**/.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
